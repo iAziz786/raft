@@ -17,12 +17,15 @@ var rootCmd = &cobra.Command{
 	Run:   Run,
 }
 
+var httpPort string
+var raftPort string
+
 func Run(cmd *cobra.Command, args []string) {
 	go func() {
 		coords := new(Coords)
 		rpc.Register(coords)
 		rpc.HandleHTTP()
-		l, err := net.Listen("tcp", ":1234")
+		l, err := net.Listen("tcp", ":"+raftPort)
 		if err != nil {
 			log.Fatal("listen error:", err)
 		}
@@ -34,7 +37,7 @@ func Run(cmd *cobra.Command, args []string) {
 	}()
 
 	http.HandleFunc("/key", func(writer http.ResponseWriter, r *http.Request) {
-		client, err := rpc.DialHTTP("tcp", "localhost:1234")
+		client, err := rpc.DialHTTP("tcp", "localhost:"+raftPort)
 		if err != nil {
 			log.Fatal("dialing error:", err)
 		}
@@ -42,13 +45,19 @@ func Run(cmd *cobra.Command, args []string) {
 		client.Call("Coords.Elect", "rambo", 4)
 	})
 
-	if err := http.ListenAndServe(":8000", nil); err != nil {
+	if err := http.ListenAndServe(":"+httpPort, nil); err != nil {
 		fmt.Println("error while serving", err)
 		os.Exit(1)
 	}
 }
 
 func Execute() {
+	rootCmd.PersistentFlags().StringVarP(&httpPort, "http-port", "p", "", "run the http server to handle the clients")
+	rootCmd.PersistentFlags().StringVarP(&raftPort, "raft-port", "r", "", "communicate with other rpc servers on this port")
+
+	rootCmd.MarkPersistentFlagRequired("http-port")
+	rootCmd.MarkPersistentFlagRequired("raft-port")
+
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)

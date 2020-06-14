@@ -19,6 +19,7 @@ var rootCmd = &cobra.Command{
 
 var httpPort string
 var raftPort string
+var nodes []string
 
 func Run(cmd *cobra.Command, args []string) {
 	go func() {
@@ -36,8 +37,8 @@ func Run(cmd *cobra.Command, args []string) {
 		}
 	}()
 
-	http.HandleFunc("/key", func(writer http.ResponseWriter, r *http.Request) {
-		client, err := rpc.DialHTTP("tcp", "localhost:"+raftPort)
+	http.HandleFunc("/key", func(w http.ResponseWriter, r *http.Request) {
+		client, err := rpc.DialHTTP("tcp", pickRandomElement(nodes))
 		if err != nil {
 			log.Fatal("dialing error:", err)
 		}
@@ -54,9 +55,11 @@ func Run(cmd *cobra.Command, args []string) {
 func Execute() {
 	rootCmd.PersistentFlags().StringVarP(&httpPort, "http-port", "p", "", "run the http server to handle the clients")
 	rootCmd.PersistentFlags().StringVarP(&raftPort, "raft-port", "r", "", "communicate with other rpc servers on this port")
+	rootCmd.PersistentFlags().StringSliceVarP(&nodes, "nodes", "n", []string{}, "endpoint for all the nodes in the cluster")
 
 	rootCmd.MarkPersistentFlagRequired("http-port")
 	rootCmd.MarkPersistentFlagRequired("raft-port")
+	rootCmd.MarkPersistentFlagRequired("nodes")
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)

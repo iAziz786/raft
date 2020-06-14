@@ -8,7 +8,7 @@ type Coords struct {
 }
 
 func (c *Coords) Elect(name string, state *int) error {
-	fmt.Println("calling elect with value", *state)
+	fmt.Printf("electing from %s\n", httpPort)
 
 	return nil
 }

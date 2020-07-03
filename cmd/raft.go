@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/spf13/cobra"
 	"log"
@@ -8,6 +9,7 @@ import (
 	"net/http"
 	"net/rpc"
 	"os"
+	"sync"
 )
 
 var rootCmd = &cobra.Command{
@@ -19,7 +21,58 @@ var rootCmd = &cobra.Command{
 
 var httpPort string
 var raftPort string
+
+// nodes are the list tpc address which serves RPC calls
 var nodes []string
+
+type UpdateKey struct {
+	Key   string
+	Value interface{}
+}
+
+type SetResponse struct {
+	Key   string      `json:"key"`
+	Value interface{} `json:"value"`
+}
+
+func CallRemoteNode(nodesToSendRPC []string) chan *AppendResult {
+	appendResult := make(chan *AppendResult)
+	var wg sync.WaitGroup
+	go func() {
+		defer close(appendResult)
+		for _, node := range nodesToSendRPC {
+			wg.Add(1)
+			go func(node string) {
+				defer wg.Done()
+				fmt.Println("dialing client", node)
+				client, err := rpc.DialHTTP("tcp", node)
+				if err != nil {
+					log.Fatal("dialing error:", err)
+				}
+
+				var appendResultForThisNode AppendResult
+				var appendArg AppendArgument
+
+				appendArg.Term = 1
+				appendArg.Entries = []string{"set value 1"}
+				appendArg.LeaderCommitIndex = 1
+				appendArg.LeaderId = raftPort
+				appendArg.PrevLogIndex = 1
+				appendArg.PrevLogTerm = 1
+
+				err = client.Call("Coords.Elect", &appendArg, &appendResultForThisNode)
+
+				if err != nil {
+					log.Fatal("error while calling the elect", err)
+				}
+
+				appendResult <- &appendResultForThisNode
+			}(node)
+		}
+		wg.Wait()
+	}()
+	return appendResult
+}
 
 func Run(cmd *cobra.Command, args []string) {
 	go func() {
@@ -44,6 +97,38 @@ func Run(cmd *cobra.Command, args []string) {
 		}
 
 		client.Call("Coords.Elect", "rambo", 4)
+	})
+
+	http.HandleFunc("/set", func(w http.ResponseWriter, r *http.Request) {
+		var nodesToSendRPC []string
+
+		for _, node := range nodes {
+			if "localhost:"+raftPort != node {
+				nodesToSendRPC = append(nodesToSendRPC, node)
+			}
+		}
+
+		decoder := json.NewDecoder(r.Body)
+
+		var updateKey UpdateKey
+
+		err := decoder.Decode(&updateKey)
+
+		if err != nil {
+			log.Fatalf("failed to decode updateKey")
+		}
+
+		appendResultChan := CallRemoteNode(nodesToSendRPC)
+
+		for ar := range appendResultChan {
+			fmt.Println("term", ar.Term)
+			fmt.Println("success", ar.Success)
+		}
+
+		response, err := json.Marshal(SetResponse{Key: "Yolo", Value: true})
+
+		w.Header().Set("content-type", "application/json")
+		w.Write(response)
 	})
 
 	if err := http.ListenAndServe(":"+httpPort, nil); err != nil {

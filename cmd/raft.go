@@ -27,7 +27,7 @@ var nodes []string
 
 type UpdateKey struct {
 	Key   string
-	Value interface{}
+	Value string
 }
 
 type SetResponse struct {
@@ -35,7 +35,7 @@ type SetResponse struct {
 	Value interface{} `json:"value"`
 }
 
-func CallRemoteNode(nodesToSendRPC []string) chan *AppendResult {
+func CallRemoteNode(nodesToSendRPC []string, key string, value string) chan *AppendResult {
 	appendResult := make(chan *AppendResult)
 	var wg sync.WaitGroup
 	go func() {
@@ -54,7 +54,7 @@ func CallRemoteNode(nodesToSendRPC []string) chan *AppendResult {
 				var appendArg AppendArgument
 
 				appendArg.Term = 1
-				appendArg.Entries = []string{"set value 1"}
+				appendArg.Entries = []string{"SET: " + key + " " + value}
 				appendArg.LeaderCommitIndex = 1
 				appendArg.LeaderId = raftPort
 				appendArg.PrevLogIndex = 1
@@ -120,7 +120,7 @@ func Run(cmd *cobra.Command, args []string) {
 			log.Fatalf("failed to decode updateKey")
 		}
 
-		appendResultChan := CallRemoteNode(nodesToSendRPC)
+		appendResultChan := CallRemoteNode(nodesToSendRPC, updateKey.Key, updateKey.Value)
 
 		for ar := range appendResultChan {
 			fmt.Println("term", ar.Term)

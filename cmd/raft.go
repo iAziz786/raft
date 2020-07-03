@@ -60,10 +60,9 @@ func CallRemoteNode(nodesToSendRPC []string) chan *AppendResult {
 				appendArg.PrevLogIndex = 1
 				appendArg.PrevLogTerm = 1
 
-				err = client.Call("Coords.Elect", &appendArg, &appendResultForThisNode)
-
+				err = client.Call("Coords.AppendEntry", &appendArg, &appendResultForThisNode)
 				if err != nil {
-					log.Fatal("error while calling the elect", err)
+					log.Println("error while calling the elect", err)
 				}
 
 				appendResult <- &appendResultForThisNode
@@ -77,7 +76,10 @@ func CallRemoteNode(nodesToSendRPC []string) chan *AppendResult {
 func Run(cmd *cobra.Command, args []string) {
 	go func() {
 		coords := new(Coords)
-		rpc.Register(coords)
+		err := rpc.Register(coords)
+		if err != nil {
+			log.Fatalf("unable to register the struct")
+		}
 		rpc.HandleHTTP()
 		l, err := net.Listen("tcp", ":"+raftPort)
 		if err != nil {
@@ -128,7 +130,10 @@ func Run(cmd *cobra.Command, args []string) {
 		response, err := json.Marshal(SetResponse{Key: "Yolo", Value: true})
 
 		w.Header().Set("content-type", "application/json")
-		w.Write(response)
+		_, err = w.Write(response)
+		if err != nil {
+			log.Println("unable to write the response")
+		}
 	})
 
 	if err := http.ListenAndServe(":"+httpPort, nil); err != nil {

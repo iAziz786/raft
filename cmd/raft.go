@@ -36,6 +36,8 @@ type SetResponse struct {
 	Value interface{} `json:"value"`
 }
 
+var replicatedStateMachine = make(map[string]string)
+
 func appendLog(command, key, value string) string {
 	return command + ": " + key + " " + value
 }
@@ -103,20 +105,12 @@ func Run(cmd *cobra.Command, args []string) {
 		}
 	}()
 
-	http.HandleFunc("/key", func(w http.ResponseWriter, r *http.Request) {
-		client, err := rpc.DialHTTP("tcp", pickRandomElement(nodes))
-		if err != nil {
-			log.Fatal("dialing error:", err)
-		}
-
-		client.Call("Coords.Elect", "rambo", 4)
-	})
+	http.HandleFunc("/value", GetKey)
 
 	http.HandleFunc("/set", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case PUT:
 		case DELETE:
-		case GET:
 			break
 		default:
 			w.WriteHeader(http.StatusBadRequest)
@@ -145,14 +139,15 @@ func Run(cmd *cobra.Command, args []string) {
 
 		appendResultChan := CallRemoteNode(nodesToSendRPC, updateKey.Key, updateKey.Value)
 
-		successfulAppend := 0
+		successfulAppend := 1
 		for ar := range appendResultChan {
 			if ar.Success == true {
 				successfulAppend++
 			}
 			// calculate that successful send is more than half
 			if math.Ceil(float64(successfulAppend)/2) > float64(len(nodesToSendRPC)/2) {
-				// TODO: add the value to the data store
+				// add the value to the data store
+				replicatedStateMachine[updateKey.Key] = updateKey.Value
 			}
 		}
 

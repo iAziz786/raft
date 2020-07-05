@@ -35,6 +35,10 @@ type SetResponse struct {
 	Value interface{} `json:"value"`
 }
 
+func appendLog(command, key, value string) string {
+	return command + ": " + key + " " + value
+}
+
 func CallRemoteNode(nodesToSendRPC []string, key string, value string) chan *AppendResult {
 	appendResult := make(chan *AppendResult)
 	var wg sync.WaitGroup
@@ -54,7 +58,7 @@ func CallRemoteNode(nodesToSendRPC []string, key string, value string) chan *App
 				var appendArg AppendArgument
 
 				appendArg.Term = 1
-				appendArg.Entries = []string{"SET: " + key + " " + value}
+				appendArg.Entries = []string{appendLog("SET", key, value)}
 				appendArg.LeaderCommitIndex = 1
 				appendArg.LeaderId = raftPort
 				appendArg.PrevLogIndex = 1
@@ -74,18 +78,18 @@ func CallRemoteNode(nodesToSendRPC []string, key string, value string) chan *App
 }
 
 func Run(cmd *cobra.Command, args []string) {
-	go func() {
-		coords := new(Coords)
-		err := rpc.Register(coords)
-		if err != nil {
-			log.Fatalf("unable to register the struct")
-		}
-		rpc.HandleHTTP()
-		l, err := net.Listen("tcp", ":"+raftPort)
-		if err != nil {
-			log.Fatal("listen error:", err)
-		}
+	coords := new(Coords)
+	err := rpc.Register(coords)
+	if err != nil {
+		log.Fatalf("unable to register the struct")
+	}
+	rpc.HandleHTTP()
+	l, err := net.Listen("tcp", ":"+raftPort)
+	if err != nil {
+		log.Fatal("listen error:", err)
+	}
 
+	go func() {
 		err = http.Serve(l, nil)
 		if err != nil {
 			log.Fatal("serving error:", err)
@@ -119,6 +123,8 @@ func Run(cmd *cobra.Command, args []string) {
 		if err != nil {
 			log.Fatalf("failed to decode updateKey")
 		}
+
+		coords.Log = append(coords.Log, appendLog("SET", updateKey.Key, updateKey.Value))
 
 		appendResultChan := CallRemoteNode(nodesToSendRPC, updateKey.Key, updateKey.Value)
 

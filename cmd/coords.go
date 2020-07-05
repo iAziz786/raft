@@ -13,10 +13,11 @@ type AppendResult struct {
 }
 
 type AppendArgument struct {
-	Term              int
-	LeaderId          string
-	PrevLogIndex      int
-	PrevLogTerm       int
+	Term         int
+	LeaderId     string
+	PrevLogIndex int
+	PrevLogTerm  int
+	// TODO: convert the entries to any other format like JSON
 	Entries           []string
 	LeaderCommitIndex int
 }

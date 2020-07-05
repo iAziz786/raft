@@ -127,7 +127,11 @@ func Run(cmd *cobra.Command, args []string) {
 			fmt.Println("success", ar.Success)
 		}
 
-		response, err := json.Marshal(SetResponse{Key: "Yolo", Value: true})
+		response, err := json.Marshal(SetResponse{Key: updateKey.Key, Value: updateKey.Value})
+
+		if err != nil {
+			log.Fatal("unable to marshal response JSON")
+		}
 
 		w.Header().Set("content-type", "application/json")
 		_, err = w.Write(response)

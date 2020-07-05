@@ -147,9 +147,15 @@ func Execute() {
 	rootCmd.PersistentFlags().StringVarP(&raftPort, "raft-port", "r", "", "communicate with other rpc servers on this port")
 	rootCmd.PersistentFlags().StringSliceVarP(&nodes, "nodes", "n", []string{}, "endpoint for all the nodes in the cluster")
 
-	rootCmd.MarkPersistentFlagRequired("http-port")
-	rootCmd.MarkPersistentFlagRequired("raft-port")
-	rootCmd.MarkPersistentFlagRequired("nodes")
+	if rootCmd.MarkPersistentFlagRequired("http-port") != nil {
+		log.Fatalf("unable to make flag %s required", "http-port")
+	}
+	if rootCmd.MarkPersistentFlagRequired("raft-port") != nil {
+		log.Fatalf("unable to make flag %s required", "raft-port")
+	}
+	if rootCmd.MarkPersistentFlagRequired("nodes") != nil {
+		log.Fatalf("unable to make flag %s required", "nodes")
+	}
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)

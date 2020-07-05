@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/spf13/cobra"
 	"log"
+	"math"
 	"net"
 	"net/http"
 	"net/rpc"
@@ -38,6 +39,12 @@ type SetResponse struct {
 func appendLog(command, key, value string) string {
 	return command + ": " + key + " " + value
 }
+
+const (
+	PUT    = "PUT"
+	DELETE = "DELETE"
+	GET    = "GET"
+)
 
 func CallRemoteNode(nodesToSendRPC []string, key string, value string) chan *AppendResult {
 	appendResult := make(chan *AppendResult)
@@ -106,6 +113,16 @@ func Run(cmd *cobra.Command, args []string) {
 	})
 
 	http.HandleFunc("/set", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case PUT:
+		case DELETE:
+		case GET:
+			break
+		default:
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("unsupported method"))
+			return
+		}
 		var nodesToSendRPC []string
 
 		for _, node := range nodes {
@@ -128,9 +145,15 @@ func Run(cmd *cobra.Command, args []string) {
 
 		appendResultChan := CallRemoteNode(nodesToSendRPC, updateKey.Key, updateKey.Value)
 
+		successfulAppend := 0
 		for ar := range appendResultChan {
-			fmt.Println("term", ar.Term)
-			fmt.Println("success", ar.Success)
+			if ar.Success == true {
+				successfulAppend++
+			}
+			// calculate that successful send is more than half
+			if math.Ceil(float64(successfulAppend)/2) > float64(len(nodesToSendRPC)/2) {
+				// TODO: add the value to the data store
+			}
 		}
 
 		response, err := json.Marshal(SetResponse{Key: updateKey.Key, Value: updateKey.Value})

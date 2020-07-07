@@ -3,8 +3,9 @@ package cmd
 import "fmt"
 
 type Coords struct {
-	Term int
-	Log  []string
+	Term     int
+	VotedFor interface{} // interface because it can be string or nil
+	Log      []LogEntry
 }
 
 type AppendResult struct {
@@ -13,19 +14,61 @@ type AppendResult struct {
 }
 
 type AppendArgument struct {
-	Term         int
-	LeaderId     string
-	PrevLogIndex int
-	PrevLogTerm  int
-	// TODO: convert the entries to any other format like JSON
-	Entries           []string
+	Term              int
+	LeaderId          string
+	PrevLogIndex      int
+	PrevLogTerm       int
+	Entries           []LogEntry
 	LeaderCommitIndex int
 }
 
-func (c *Coords) Elect(appendArg *AppendArgument, state *AppendResult) error {
-	fmt.Printf("electing from %s\n", httpPort)
+type VoteArgument struct {
+	Term         int
+	CandidateId  string
+	LastLogIndex int
+	LastLogTerm  int
+}
 
+type VoteResult struct {
+	Term        int
+	VoteGranted bool
+}
+
+func (c *Coords) RequestVote(voteArg *VoteArgument, result *VoteResult) error {
+	// 1. Reply false if term < currentTerm
+	if voteArg.Term < c.Term {
+		result.Term = c.Term
+		result.VoteGranted = false
+		return nil
+	}
+	// 2. If votedFor is null or candidateId, and candidate's log is
+	// at least as up-to-date as receiver's log, grand vote
+	if c.VotedFor == nil || c.VotedFor == voteArg.CandidateId {
+		// check candidates log whether is it as up-to-date as mine
+		if c.getLastLogIndex() <= voteArg.LastLogIndex && c.getLastLogTerm() <= voteArg.LastLogTerm {
+			result.Term = voteArg.Term
+			result.VoteGranted = true
+			return nil
+		}
+	}
+	result.VoteGranted = false
 	return nil
+}
+
+func (c *Coords) getLastLogIndex() int {
+	if len(c.Log) == 0 {
+		return 0
+	}
+	return len(c.Log) - 1
+}
+
+func (c *Coords) getLastLogTerm() int {
+	if len(c.Log) == 0 {
+		return 0
+	}
+
+	lastLogEntry := c.Log[len(c.Log)-1]
+	return lastLogEntry.Term
 }
 
 func (c *Coords) AppendEntry(appendArg *AppendArgument, state *AppendResult) error {

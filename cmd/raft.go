@@ -31,15 +31,22 @@ type UpdateKey struct {
 	Value string
 }
 
-type SetResponse struct {
-	Key   string      `json:"key"`
-	Value interface{} `json:"value"`
+type LogEntry struct {
+	Term    int         `json:"-"`
+	Command string      `json:"-"`
+	Key     string      `json:"key"`
+	Value   interface{} `json:"value"`
 }
 
 var replicatedStateMachine = make(map[string]string)
 
-func appendLog(command, key, value string) string {
-	return command + ": " + key + " " + value
+func appendLog(term int, command, key, value string) LogEntry {
+	return LogEntry{
+		Term:    term,
+		Key:     key,
+		Value:   value,
+		Command: command,
+	}
 }
 
 const (
@@ -48,7 +55,7 @@ const (
 	GET    = "GET"
 )
 
-func CallRemoteNode(nodesToSendRPC []string, key string, value string) chan *AppendResult {
+func CallRemoteNode(coords *Coords, nodesToSendRPC []string, command, key, value string) chan *AppendResult {
 	appendResult := make(chan *AppendResult)
 	var wg sync.WaitGroup
 	go func() {
@@ -67,7 +74,7 @@ func CallRemoteNode(nodesToSendRPC []string, key string, value string) chan *App
 				var appendArg AppendArgument
 
 				appendArg.Term = 1
-				appendArg.Entries = []string{appendLog("SET", key, value)}
+				appendArg.Entries = []LogEntry{appendLog(coords.Term, command, key, value)}
 				appendArg.LeaderCommitIndex = 1
 				appendArg.LeaderId = raftPort
 				appendArg.PrevLogIndex = 1
@@ -135,9 +142,10 @@ func Run(cmd *cobra.Command, args []string) {
 			log.Fatalf("failed to decode updateKey")
 		}
 
-		coords.Log = append(coords.Log, appendLog("SET", updateKey.Key, updateKey.Value))
+		command := "PUT"
+		coords.Log = append(coords.Log, appendLog(coords.Term, command, updateKey.Key, updateKey.Value))
 
-		appendResultChan := CallRemoteNode(nodesToSendRPC, updateKey.Key, updateKey.Value)
+		appendResultChan := CallRemoteNode(coords, nodesToSendRPC, command, updateKey.Key, updateKey.Value)
 
 		successfulAppend := 1
 		for ar := range appendResultChan {
@@ -151,7 +159,7 @@ func Run(cmd *cobra.Command, args []string) {
 			}
 		}
 
-		response, err := json.Marshal(SetResponse{Key: updateKey.Key, Value: updateKey.Value})
+		response, err := json.Marshal(LogEntry{Key: updateKey.Key, Value: updateKey.Value})
 
 		if err != nil {
 			log.Fatal("unable to marshal response JSON")

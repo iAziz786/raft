@@ -16,7 +16,7 @@ func GetKey(w http.ResponseWriter, r *http.Request) {
 	decoder.Decode(&body)
 
 	if val, ok := replicatedStateMachine[body.Key]; ok {
-		response, err := json.Marshal(SetResponse{Key: body.Key, Value: val})
+		response, err := json.Marshal(LogEntry{Key: body.Key, Value: val})
 
 		if err != nil {
 			log.Fatal("unable to marshal response JSON")
@@ -25,7 +25,7 @@ func GetKey(w http.ResponseWriter, r *http.Request) {
 		w.Write(response)
 	} else {
 		w.WriteHeader(http.StatusNotFound)
-		response, err := json.Marshal(SetResponse{Key: body.Key, Value: nil})
+		response, err := json.Marshal(LogEntry{Key: body.Key, Value: nil})
 
 		if err != nil {
 			log.Fatal("unable to marshal response JSON")

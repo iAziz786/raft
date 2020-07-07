@@ -2,10 +2,27 @@ package cmd
 
 import "fmt"
 
+type ServerState string
+
+const (
+	FOLLOWER  ServerState = "FOLLOWER"
+	CANDIDATE             = "CANDIDATE"
+	LEADER                = "LEADER"
+)
+
 type Coords struct {
+	State    ServerState
 	Term     int
 	VotedFor interface{} // interface because it can be string or nil
 	Log      []LogEntry
+}
+
+func NewCoords() *Coords {
+	return &Coords{
+		State:    FOLLOWER,
+		Term:     0,
+		VotedFor: nil,
+	}
 }
 
 type AppendResult struct {

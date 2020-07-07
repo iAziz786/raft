@@ -94,7 +94,7 @@ func CallRemoteNode(coords *Coords, nodesToSendRPC []string, command, key, value
 }
 
 func Run(cmd *cobra.Command, args []string) {
-	coords := new(Coords)
+	coords := NewCoords()
 	err := rpc.Register(coords)
 	if err != nil {
 		log.Fatalf("unable to register the struct")

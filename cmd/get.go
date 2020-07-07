@@ -24,13 +24,13 @@ func GetKey(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(response)
 	} else {
-		w.WriteHeader(http.StatusNotFound)
 		response, err := json.Marshal(LogEntry{Key: body.Key, Value: nil})
 
 		if err != nil {
 			log.Fatal("unable to marshal response JSON")
 		}
 		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
 		w.Write(response)
 	}
 }

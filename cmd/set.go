@@ -21,7 +21,7 @@ func SetKey(coords *Coords) func(http.ResponseWriter, *http.Request) {
 		}
 		var nodesToSendRPC []string
 
-		for _, node := range nodes {
+		for _, node := range peers {
 			if "localhost:"+raftPort != node {
 				nodesToSendRPC = append(nodesToSendRPC, node)
 			}

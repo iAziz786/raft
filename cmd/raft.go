@@ -3,12 +3,16 @@ package cmd
 import (
 	"fmt"
 	"log"
-	"net"
-	"net/http"
 	"net/rpc"
 	"os"
 	"sync"
+	"time"
 
+	"github.com/iAziz786/raft/config"
+	"github.com/iAziz786/raft/receiver/rpc_receiver"
+	"github.com/iAziz786/raft/replicator/rpc_replicator"
+	"github.com/iAziz786/raft/server"
+	"github.com/iAziz786/raft/storage/bbolt_store"
 	"github.com/spf13/cobra"
 )
 
@@ -22,8 +26,8 @@ var rootCmd = &cobra.Command{
 var httpPort string
 var raftPort string
 
-// nodes are the list tpc address which serves RPC calls
-var nodes []string
+// peers are the list tpc address which serves RPC calls
+var peers []string
 
 type UpdateKey struct {
 	Key   string
@@ -93,47 +97,42 @@ func CallRemoteNode(coords *Coords, nodesToSendRPC []string, command, key, value
 }
 
 func Run(cmd *cobra.Command, args []string) {
-	coords := NewCoords()
-	err := rpc.Register(coords)
-	if err != nil {
-		log.Fatalf("unable to register the struct")
-	}
-	rpc.HandleHTTP()
-	l, err := net.Listen("tcp", ":"+raftPort)
-	if err != nil {
-		log.Fatal("listen error:", err)
-	}
-
+	nrr := rpc_receiver.NewRPCReceiver()
+	rpcRepl := rpc_replicator.NewRPCReplicator()
+	go nrr.Receive()
 	go func() {
-		err = http.Serve(l, nil)
-		if err != nil {
-			log.Fatal("serving error:", err)
+		for {
+			select {
+			case <-config.GetNotifier():
+				fmt.Println("notified")
+				for _, peer := range config.Peers {
+					rpcRepl.Elect(peer)
+				}
+			default:
+				time.Sleep(100 * time.Millisecond)
+				fmt.Println("default")
+			}
 		}
 	}()
-
-	http.HandleFunc("/value", GetKey)
-
-	http.HandleFunc("/set", SetKey(coords))
-
-	if err := http.ListenAndServe(":"+httpPort, nil); err != nil {
-		fmt.Println("error while serving", err)
-		os.Exit(1)
-	}
+	server := server.NewServer(rpcRepl, bbolt_store.NewStore())
+	server.Serve(config.ClientURL)
 }
 
+// Execute validates and execute the commands
 func Execute() {
-	rootCmd.PersistentFlags().StringVarP(&httpPort, "http-port", "p", "", "run the http server to handle the clients")
-	rootCmd.PersistentFlags().StringVarP(&raftPort, "raft-port", "r", "", "communicate with other rpc servers on this port")
-	rootCmd.PersistentFlags().StringSliceVarP(&nodes, "nodes", "n", []string{}, "endpoint for all the nodes in the cluster")
+	rootCmd.PersistentFlags().StringVarP(&config.ClientURL, "client-url", "p", "", "run the http server to handle the clients")
+	rootCmd.PersistentFlags().StringVarP(&config.PeerURL, "peer-url", "r", "", "communicate with other rpc servers on this port")
+	rootCmd.PersistentFlags().StringSliceVarP(&config.Peers, "peers", "n", []string{}, "endpoint for all the nodes in the cluster")
+	rootCmd.PersistentFlags().StringVarP(&config.Name, "name", "i", "default", "name of the node to identify it")
 
-	if rootCmd.MarkPersistentFlagRequired("http-port") != nil {
-		log.Fatalf("unable to make flag %s required", "http-port")
+	if rootCmd.MarkPersistentFlagRequired("client-url") != nil {
+		log.Fatalf("unable to make flag %s required", "client-url")
 	}
-	if rootCmd.MarkPersistentFlagRequired("raft-port") != nil {
-		log.Fatalf("unable to make flag %s required", "raft-port")
+	if rootCmd.MarkPersistentFlagRequired("peer-url") != nil {
+		log.Fatalf("unable to make flag %s required", "peer-url")
 	}
-	if rootCmd.MarkPersistentFlagRequired("nodes") != nil {
-		log.Fatalf("unable to make flag %s required", "nodes")
+	if rootCmd.MarkPersistentFlagRequired("peers") != nil {
+		log.Fatalf("unable to make flag %s required", "peers")
 	}
 
 	if err := rootCmd.Execute(); err != nil {
